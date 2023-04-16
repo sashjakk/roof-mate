@@ -20,7 +20,7 @@ object App extends IOApp.Simple {
     val spotService = SpotService.make[IO](userRepo, spotRepo, spotShareRepo, bookSpotRepo)
 
     val user1 = UserCreate(name = "John", surname = "Smith", phone = "+37127231766")
-    val user2 = UserCreate(name = "Jenny", surname = "Penny", phone = "+37127231766")
+    val user2 = UserCreate(name = "Jenny", surname = "Penny", phone = "+37166713273")
 
     val now = LocalDateTime.now()
 
