@@ -1,35 +1,37 @@
 package com.github.sashjakk.spot.share
 
-import cats.implicits.{catsSyntaxEitherId, catsSyntaxEq}
+import cats.effect.Sync
+import cats.implicits.catsSyntaxEq
 
 import java.util.UUID
 import scala.collection.mutable
 
-trait SpotShareRepo {
-  def create(share: ShareCreate): Either[Throwable, Share]
-  def findById(id: UUID): Option[Share]
-  def findBySpotId(id: UUID): Option[Share]
-  def all(): List[Share]
+trait SpotShareRepo[F[_]] {
+  def create(share: ShareCreate): F[Share]
+  def findById(id: UUID): F[Option[Share]]
+  def findBySpotId(id: UUID): F[Option[Share]]
+  def all(): F[List[Share]]
 }
 
 object SpotShareRepo {
-  def inMemory(memory: mutable.Map[UUID, Share] = mutable.Map.empty): SpotShareRepo =
-    new SpotShareRepo {
-      override def create(share: ShareCreate): Either[Throwable, Share] = {
-        val uuid = UUID.randomUUID()
-        val entity = Share(uuid, share.spotId, share.from, share.to)
+  def inMemory[F[_]: Sync](memory: mutable.Map[UUID, Share] = mutable.Map.empty): SpotShareRepo[F] =
+    new SpotShareRepo[F] {
+      override def create(share: ShareCreate): F[Share] =
+        Sync[F].delay {
+          val uuid = UUID.randomUUID()
+          val entity = Share(uuid, share.spotId, share.from, share.to)
 
-        memory += uuid -> entity
+          memory += uuid -> entity
 
-        entity.asRight
-      }
+          entity
+        }
 
-      override def findById(id: UUID): Option[Share] =
-        memory.get(id)
+      override def findById(id: UUID): F[Option[Share]] =
+        Sync[F].delay(memory.get(id))
 
-      override def findBySpotId(id: UUID): Option[Share] =
-        memory.values.find(_.spotId === id)
+      override def findBySpotId(id: UUID): F[Option[Share]] =
+        Sync[F].delay(memory.values.find(_.spotId === id))
 
-      override def all(): List[Share] = memory.values.toList
+      override def all(): F[List[Share]] = Sync[F].delay(memory.values.toList)
     }
 }

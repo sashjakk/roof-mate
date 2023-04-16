@@ -1,31 +1,34 @@
 package com.github.sashjakk.spot
 
-import cats.implicits.{catsSyntaxEitherId, catsSyntaxEq}
+import cats.effect.Sync
+import cats.implicits.catsSyntaxEq
 
 import java.util.UUID
 import scala.collection.mutable
 
-trait SpotRepo {
-  def create(spot: SpotCreate): Either[Throwable, Spot]
-  def findById(id: UUID): Option[Spot]
-  def findByIdentifier(identifier: String): Option[Spot]
+trait SpotRepo[F[_]] {
+  def create(spot: SpotCreate): F[Spot]
+  def findById(id: UUID): F[Option[Spot]]
+  def findByIdentifier(identifier: String): F[Option[Spot]]
 }
 
 object SpotRepo {
-  def inMemory(memory: mutable.Map[UUID, Spot] = mutable.Map.empty): SpotRepo =
-    new SpotRepo {
-      override def create(spot: SpotCreate): Either[Throwable, Spot] = {
-        val uuid = UUID.randomUUID()
-        val entity = Spot(uuid, spot.identifier, spot.userId)
+  def inMemory[F[_]: Sync](memory: mutable.Map[UUID, Spot] = mutable.Map.empty): SpotRepo[F] =
+    new SpotRepo[F] {
+      override def create(spot: SpotCreate): F[Spot] =
+        Sync[F].delay {
+          val uuid = UUID.randomUUID()
+          val entity = Spot(uuid, spot.identifier, spot.userId)
 
-        memory += uuid -> entity
+          memory += uuid -> entity
 
-        entity.asRight
-      }
+          entity
+        }
 
-      override def findById(id: UUID): Option[Spot] = memory.get(id)
+      override def findById(id: UUID): F[Option[Spot]] =
+        Sync[F].delay(memory.get(id))
 
-      override def findByIdentifier(identifier: String): Option[Spot] =
-        memory.values.find(_.identifier === identifier)
+      override def findByIdentifier(identifier: String): F[Option[Spot]] =
+        Sync[F].delay(memory.values.find(_.identifier === identifier))
     }
 }
