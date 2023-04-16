@@ -1,28 +1,30 @@
 package com.github.sashjakk.spot.book
 
-import cats.implicits.{catsSyntaxEitherId, catsSyntaxEq}
+import cats.effect.Sync
+import cats.implicits.catsSyntaxEq
 
 import java.util.UUID
 import scala.collection.mutable
 
-trait BookingRepo {
-  def create(booking: BookingCreate): Either[Throwable, Booking]
-  def findByShareId(id: UUID): List[Booking]
+trait BookingRepo[F[_]] {
+  def create(booking: BookingCreate): F[Booking]
+  def findByShareId(id: UUID): F[List[Booking]]
 }
 
 object BookingRepo {
-  def inMemory(memory: mutable.Map[UUID, Booking] = mutable.Map.empty): BookingRepo =
-    new BookingRepo {
-      override def create(booking: BookingCreate): Either[Throwable, Booking] = {
-        val uuid = UUID.randomUUID()
-        val entity = Booking(uuid, booking.shareId, booking.userId, booking.from, booking.to)
+  def inMemory[F[_]: Sync](memory: mutable.Map[UUID, Booking] = mutable.Map.empty): BookingRepo[F] =
+    new BookingRepo[F] {
+      override def create(booking: BookingCreate): F[Booking] =
+        Sync[F].delay {
+          val uuid = UUID.randomUUID()
+          val entity = Booking(uuid, booking.shareId, booking.userId, booking.from, booking.to)
 
-        memory += uuid -> entity
+          memory += uuid -> entity
 
-        entity.asRight
-      }
+          entity
+        }
 
-      override def findByShareId(id: UUID): List[Booking] =
-        memory.values.filter(_.shareId === id).toList
+      override def findByShareId(id: UUID): F[List[Booking]] =
+        Sync[F].delay(memory.values.filter(_.shareId === id).toList)
     }
 }

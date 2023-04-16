@@ -1,21 +1,31 @@
 package com.github.sashjakk.user
 
-import cats.implicits.{catsSyntaxEitherId, toBifunctorOps}
+import cats.MonadError
+import cats.syntax.all._
 
 sealed trait UserError
 object DuplicatePhoneNumberError extends UserError
 object PersistenceError extends UserError
 
-trait UserService {
-  def create(user: UserCreate): Either[UserError, User]
+trait UserService[F[_]] {
+  def create(user: UserCreate): F[Either[UserError, User]]
 }
 
 object UserService {
-  def default(repo: UserRepo): UserService = new UserService {
-    override def create(user: UserCreate): Either[UserError, User] = {
-      repo.findByPhone(user.phone) match {
-        case Some(_) => DuplicatePhoneNumberError.asLeft
-        case None    => repo.create(user).leftMap(_ => PersistenceError)
+  private type UserServiceError[F[_]] = MonadError[F, Throwable]
+  private object UserServiceError {
+    def apply[F[_]](implicit ev: UserServiceError[F]): UserServiceError[F] = ev
+  }
+
+  def make[F[_]: UserServiceError](repo: UserRepo[F]): UserService[F] = new UserService[F] {
+    override def create(user: UserCreate): F[Either[UserError, User]] = {
+      repo.findByPhone(user.phone).flatMap {
+        case Some(_) => UserServiceError[F].pure(DuplicatePhoneNumberError.asLeft)
+        case None =>
+          repo
+            .create(user)
+            .attempt
+            .map(_.leftMap(_ => PersistenceError))
       }
     }
   }
