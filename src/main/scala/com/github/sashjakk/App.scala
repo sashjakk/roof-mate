@@ -1,18 +1,16 @@
 package com.github.sashjakk
 
-import cats.data.EitherT
-import cats.effect.{IO, IOApp}
+import cats.effect.{Clock, IO, IOApp}
+import com.github.sashjakk.interval.IntervalSyntax.{InstantCreators, InstantOperations}
 import com.github.sashjakk.spot.book.{BookingCreate, BookingRepo}
 import com.github.sashjakk.spot.share.{ShareCreate, SpotShareRepo}
 import com.github.sashjakk.spot.{SpotCreate, SpotRepo, SpotService}
-import com.github.sashjakk.user.{DuplicatePhoneNumberError, PersistenceError, User, UserCreate, UserRepo, UserService}
-
-import java.time.{LocalDateTime, ZoneOffset}
+import com.github.sashjakk.user.{UserCreate, UserRepo, UserService}
 
 object App extends IOApp.Simple {
   val run: IO[Unit] = {
     val userRepo = UserRepo.inMemory[IO]()
-    val userService = UserService.make(userRepo)
+    val userService = UserService.make[IO](userRepo)
 
     val spotRepo = SpotRepo.inMemory[IO]()
     val spotShareRepo = SpotShareRepo.inMemory[IO]()
@@ -22,33 +20,17 @@ object App extends IOApp.Simple {
     val user1 = UserCreate(name = "John", surname = "Smith", phone = "+37127231766")
     val user2 = UserCreate(name = "Jenny", surname = "Penny", phone = "+37166713273")
 
-    val now = LocalDateTime.now()
-
     for {
-      user <- EitherT(userService.create(user1)).leftMap {
-        case DuplicatePhoneNumberError => new Error("duplicate phone number")
-        case PersistenceError          => new Error("failed to save")
-      }.rethrowT
-
+      user <- userService.create(user1)
       spotDTO = SpotCreate("46", user.id)
 
-      user2 <- EitherT(userService.create(user2)) .leftMap {
-        case DuplicatePhoneNumberError => new Error("duplicate phone number")
-        case PersistenceError          => new Error("failed to save")
-      }.rethrowT
-
+      user2 <- userService.create(user2)
       spot <- spotService.create(spotDTO)
 
-      share <- spotService.share(
-        ShareCreate(spot.id, now.toInstant(ZoneOffset.UTC), now.plusHours(6).toInstant(ZoneOffset.UTC))
-      )
+      now <- Clock[IO].realTimeInstant
 
-      request = BookingCreate(
-        share.id,
-        user2.id,
-        now.plusHours(1).toInstant(ZoneOffset.UTC),
-        now.plusHours(4).toInstant(ZoneOffset.UTC)
-      )
+      share <- spotService.share(ShareCreate(spot.id, now, now + 6.h))
+      request = BookingCreate(share.id, user2.id, now + 1.h, now + 4.h)
 
       result <- spotService.book(request)
       _ <- IO(println(s"result: $result"))

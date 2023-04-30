@@ -1,84 +1,84 @@
 package com.github.sashjakk.interval
 
-import cats.implicits.catsSyntaxEitherId
+import cats.MonadThrow
+import cats.syntax.all._
 import com.github.sashjakk.interval.IntervalSyntax._
 
 import java.time.{Instant, LocalDateTime, ZoneOffset}
-import scala.annotation.tailrec
 import scala.collection.immutable.SortedSet
 
-case class Interval(from: Instant, to: Instant) {
+case class Interval private[interval] (from: Instant, to: Instant) {
   def overlaps(other: Interval): Boolean =
     from <= other.to && to >= other.from
 
   def encloses(other: Interval): Boolean =
     other.from >= from && other.to <= to
 
-  def distance(other: Interval): Long =
+  def distanceTo(other: Interval): Long =
     Math.max(other.from.getEpochSecond - to.getEpochSecond, 0)
 
-  def union(other: Interval, minDistance: Long = 15 * 60): Set[Interval] =
-    if (distance(other) > minDistance) Set(this, other)
+  def duration: Long =
+    Math.max(to.getEpochSecond - from.getEpochSecond, 0)
+
+  def unionWith(other: Interval, minDistance: Long = 15 * 60): Set[Interval] =
+    if (distanceTo(other) > minDistance) Set(this, other)
     else Set(Interval(from, other.to))
 
-  def cut(other: Interval): Either[Error, Set[Interval]] = {
-    Either.cond(
-      this encloses other,
-      Set(Interval.from(from, other.from), Interval.from(other.to, to)).collect { case Right(value) => value },
-      new Error("Unable to cut with non enclosing interval")
-    )
+  def cut[F[_]: MonadThrow](other: Interval): F[Set[Interval]] = {
+    if (encloses(other)) {
+      (Interval.from(from, other.from), Interval.from(other.to, to))
+        .mapN((a, b) => Set(a, b).filter(_.duration > 0))
+    } else
+      MonadThrow[F].raiseError(new Error("Unable to cut with non enclosing interval"))
   }
 
-  def cutAll(intervals: List[Interval], minDistance: Long = 15 * 60): Either[Error, Set[Interval]] = {
-
-    @tailrec
-    def loop(intervals: List[Interval], slots: SortedSet[Interval] = SortedSet(this)): SortedSet[Interval] = {
-      intervals match {
-        case Nil => slots
-        case it :: tail =>
-          slots.find(_ encloses it) match {
-            case None => loop(tail, slots)
-            case Some(target) =>
-              target.cut(it) match {
-                case Left(_)     => slots
-                case Right(free) => loop(tail, slots - target ++ free)
-              }
-          }
-      }
-    }
+  def cutAll[F[_]: MonadThrow](intervals: List[Interval], minDistance: Long = 15 * 60): F[Set[Interval]] = {
+    type In = (List[Interval], SortedSet[Interval])
+    type Out = SortedSet[Interval]
 
     val combined = intervals
       .foldRight(SortedSet.empty[Interval]) { (it, acc) =>
         if (acc.isEmpty) acc + it
-        else acc.tail concat it.union(acc.head, minDistance)
+        else acc.tail ++ it.unionWith(acc.head, minDistance)
       }
       .toList
 
-    loop(combined).asRight
+    MonadThrow[F]
+      .tailRecM[In, Out]((combined, SortedSet(this))) { case (intervals, slots) =>
+        intervals match {
+          case Nil => slots.asRight[In].pure[F]
+          case it :: tail =>
+            slots.find(_ encloses it) match {
+              case None => (tail, slots).asLeft[Out].pure[F]
+              case Some(target) =>
+                target.cut[F](it).redeem(_ => slots.asRight[In], free => (tail, slots - target ++ free).asLeft[Out])
+            }
+        }
+      }
+      .map(_.toSet)
   }
 
   override def toString: String = s"$from -> $to"
 }
 
 object Interval {
-  def apply(from: Instant, to: Instant): Interval =
+  private[interval] def apply(from: Instant, to: Instant): Interval =
     new Interval(from, to)
 
-  def from(
+  def from[F[_]: MonadThrow](
     from: LocalDateTime,
     to: LocalDateTime,
     zoneOffset: ZoneOffset = ZoneOffset.UTC
-  ): Either[Throwable, Interval] = {
+  ): F[Interval] = {
     Interval.from(from.toInstant(zoneOffset), to.toInstant(zoneOffset))
   }
 
-  def from(from: Instant, to: Instant): Either[Throwable, Interval] =
-    Either
-      .cond(
-        !from.isAfter(to) && (to.getEpochSecond - from.getEpochSecond) > 0,
-        new Interval(from, to),
-        new Error("Invalid time range")
-      )
+  def from[F[_]: MonadThrow](from: Instant, to: Instant): F[Interval] = {
+    if (!from.isAfter(to) && (to.getEpochSecond - from.getEpochSecond) >= 0)
+      Interval(from, to).pure
+    else
+      MonadThrow[F].raiseError(new Error("Invalid time range"))
+  }
 
   implicit def orderingByFromValue: Ordering[Interval] =
     Ordering.by(_.from)

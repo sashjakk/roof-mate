@@ -6,14 +6,13 @@ import com.github.sashjakk.interval.IntervalSyntax._
 import com.github.sashjakk.spot.book.{BookingCreate, BookingRepo}
 import com.github.sashjakk.spot.share.{Share, ShareCreate, SpotShareRepo}
 import com.github.sashjakk.user.{User, UserRepo}
-import org.scalatest.EitherValues
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.util.UUID
 import scala.collection.mutable
 
-class SpotServiceTest extends AsyncFlatSpec with AsyncIOSpec with EitherValues with Matchers {
+class SpotServiceTest extends AsyncFlatSpec with AsyncIOSpec with Matchers {
   private def fixture =
     new {
       val john = User(id = UUID.randomUUID(), name = "John", surname = "Smith", phone = "+37127231766")

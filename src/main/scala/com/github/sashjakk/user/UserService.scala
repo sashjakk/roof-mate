@@ -1,31 +1,18 @@
 package com.github.sashjakk.user
 
-import cats.MonadError
-import cats.syntax.all._
-
-sealed trait UserError
-object DuplicatePhoneNumberError extends UserError
-object PersistenceError extends UserError
+import cats.MonadThrow
+import cats.implicits.toFlatMapOps
 
 trait UserService[F[_]] {
-  def create(user: UserCreate): F[Either[UserError, User]]
+  def create(user: UserCreate): F[User]
 }
 
 object UserService {
-  private type UserServiceError[F[_]] = MonadError[F, Throwable]
-  private object UserServiceError {
-    def apply[F[_]](implicit ev: UserServiceError[F]): UserServiceError[F] = ev
-  }
-
-  def make[F[_]: UserServiceError](repo: UserRepo[F]): UserService[F] = new UserService[F] {
-    override def create(user: UserCreate): F[Either[UserError, User]] = {
+  def make[F[_]: MonadThrow](repo: UserRepo[F]): UserService[F] = new UserService[F] {
+    override def create(user: UserCreate): F[User] = {
       repo.findByPhone(user.phone).flatMap {
-        case Some(_) => UserServiceError[F].pure(DuplicatePhoneNumberError.asLeft)
-        case None =>
-          repo
-            .create(user)
-            .attempt
-            .map(_.leftMap(_ => PersistenceError))
+        case Some(_) => MonadThrow[F].raiseError(new Error("Unable to create user - duplicate phone number"))
+        case None    => repo.create(user)
       }
     }
   }
