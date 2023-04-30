@@ -18,6 +18,7 @@ object IntervalSyntax {
   }
 
   implicit class InstantCreators(val value: Int) extends AnyVal {
+    def d: Instant = Instant.ofEpochSecond(value * 60 * 60 * 24)
     def h: Instant = Instant.ofEpochSecond(value * 60 * 60)
     def m: Instant = Instant.ofEpochSecond(value * 60)
     def s: Instant = Instant.ofEpochSecond(value)

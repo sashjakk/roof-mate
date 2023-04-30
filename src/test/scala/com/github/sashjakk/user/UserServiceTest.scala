@@ -2,21 +2,19 @@ package com.github.sashjakk.user
 
 import cats.effect.IO
 import cats.effect.testing.scalatest.AsyncIOSpec
-import org.scalatest.EitherValues
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class UserServiceTest extends AsyncFlatSpec with AsyncIOSpec with EitherValues with Matchers {
+class UserServiceTest extends AsyncFlatSpec with AsyncIOSpec with Matchers {
   "UserService" should "create user" in {
     val repo = UserRepo.inMemory[IO]()
     val service = UserService.make[IO](repo)
 
     val request = UserCreate(name = "John", surname = "Smith", phone = "+37127231766")
     service.create(request).asserting { result =>
-      result.isRight shouldBe true
-      result.value.name shouldBe "John"
-      result.value.surname shouldBe "Smith"
-      result.value.phone shouldBe "+37127231766"
+      result.name shouldBe "John"
+      result.surname shouldBe "Smith"
+      result.phone shouldBe "+37127231766"
     }
   }
 
@@ -30,11 +28,11 @@ class UserServiceTest extends AsyncFlatSpec with AsyncIOSpec with EitherValues w
     for {
       _ <- service
         .create(existing)
-        .asserting(_.isRight shouldBe true)
+        .assertNoException
 
       _ <- service
         .create(failed)
-        .asserting(_.left.value shouldBe a[DuplicatePhoneNumberError.type])
+        .assertThrowsWithMessage[Error]("Unable to create user - duplicate phone number")
     } yield ()
   }
 }

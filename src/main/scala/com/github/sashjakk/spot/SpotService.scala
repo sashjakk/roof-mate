@@ -44,17 +44,11 @@ object SpotService {
           for {
             busy <- bookingRepo
               .findByShareId(shared.id)
-              .map {
-                _.collect { it =>
-                  Interval.from(it.from, it.to) match { case Right(value) => value }
-                }
-              }
+              .flatMap(_.traverse(it => Interval.from(it.from, it.to)))
 
-            timeSlots = Interval
+            timeSlots <- Interval
               .from(shared.from, shared.to)
               .flatMap(_.cutAll(busy))
-              .getOrElse(Set.empty)
-
           } yield FreeSpot(shared.spotId, timeSlots)
         }
 
@@ -85,19 +79,15 @@ object SpotService {
           share <- OptionT(sharingRepo.findById(booking.shareId))
             .getOrRaise(new Error("Unable to book spot - spot is not shared"))
 
-          interval <- EitherT
-            .fromEither(Interval.from(booking.from, booking.to))
-            .rethrowT
+          interval <- Interval.from(booking.from, booking.to)
 
           // TODO: user check
 
-          conflicts <- bookingRepo
+          busy <- bookingRepo
             .findByShareId(share.id)
-            .map { bookings =>
-              bookings
-                .collect { it => Interval.from(it.from, it.to) match { case Right(value) => value } }
-                .exists { _ encloses interval }
-            }
+            .flatMap(_.traverse(it => Interval.from(it.from, it.to)))
+
+          conflicts = busy.exists(_ encloses interval)
 
           _ <- EitherT
             .cond[F](!conflicts, Applicative[F].unit, new Error("Unable to book spot - spot is already in use"))
