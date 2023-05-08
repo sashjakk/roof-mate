@@ -1,8 +1,8 @@
 package com.github.sashjakk.spot
 
+import cats.MonadThrow
 import cats.data.{EitherT, OptionT}
 import cats.syntax.all._
-import cats.{Applicative, MonadThrow}
 import com.github.sashjakk.interval.Interval
 import com.github.sashjakk.spot.book.{Booking, BookingCreate, BookingRepo}
 import com.github.sashjakk.spot.share.{Share, ShareCreate, SpotShareRepo}
@@ -30,10 +30,7 @@ object SpotService {
 
           _ <- spotRepo
             .findByIdentifier(spot.identifier)
-            .flatMap {
-              case Some(_) => MonadThrow[F].raiseError[Unit](new Error("Spot already exists"))
-              case None    => Applicative[F].unit
-            }
+            .ensure(new Error("Spot already exists"))(_.isEmpty)
 
           spot <- spotRepo.create(spot)
         } yield spot
@@ -65,10 +62,7 @@ object SpotService {
 
           _ <- sharingRepo
             .findBySpotId(spot.id)
-            .flatMap {
-              case Some(_) => MonadThrow[F].raiseError[Unit](new Error("Unable to share - spot already shared"))
-              case None    => Applicative[F].unit
-            }
+            .ensure(new Error("Unable to share - spot already shared"))(_.isEmpty)
 
           result <- sharingRepo.create(share)
         } yield result
@@ -90,7 +84,7 @@ object SpotService {
           conflicts = busy.exists(_ encloses interval)
 
           _ <- EitherT
-            .cond[F](!conflicts, Applicative[F].unit, new Error("Unable to book spot - spot is already in use"))
+            .cond(!conflicts, (), new Error("Unable to book spot - spot is already in use"))
             .rethrowT
 
           booking <- bookingRepo.create(booking)
