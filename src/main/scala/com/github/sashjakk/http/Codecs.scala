@@ -1,20 +1,18 @@
 package com.github.sashjakk.http
 
-import cats.implicits.catsSyntaxEitherId
+import cats.implicits._
 import com.github.sashjakk.interval.Interval
 import com.github.sashjakk.spot.book.{Booking, BookingCreate}
 import com.github.sashjakk.spot.share.{Share, ShareCreate}
 import com.github.sashjakk.spot.{FreeSpot, Spot, SpotCreate}
 import com.github.sashjakk.user.{User, UserCreate}
 import io.circe._
-import io.circe.generic.semiauto.{deriveCodec, deriveEncoder}
+import io.circe.generic.semiauto.deriveCodec
 import io.circe.syntax.EncoderOps
 
 import java.time.Instant
 
 object Codecs {
-  implicit val restApiErrorDecoder: Encoder[APIError] = deriveEncoder
-
   implicit val userCreateCodec: Codec[UserCreate] = deriveCodec
   implicit val userCodec: Codec[User] = deriveCodec
 
