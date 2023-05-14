@@ -2,15 +2,15 @@ package com.github.sashjakk.http
 
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
+import com.github.sashjakk.http.API._
 import com.github.sashjakk.http.Codecs._
 import com.github.sashjakk.spot._
 import com.github.sashjakk.spot.book.{BookingCreate, BookingRepo}
 import com.github.sashjakk.spot.share.{ShareCreate, SpotShareRepo}
 import com.github.sashjakk.user.{UserCreate, UserRepo, UserService}
-import fs2.Compiler.Target.forConcurrent
 import org.http4s._
 import org.http4s.circe.CirceEntityCodec.{circeEntityDecoder, circeEntityEncoder}
-import org.http4s.dsl.io._
+import org.http4s.dsl.io.{Created, _}
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.ErrorHandling
 
@@ -20,7 +20,7 @@ object Server extends IOApp {
       request
         .as[UserCreate]
         .flatMap(service.create)
-        .redeemWith(e => BadRequest(APIError(e.getMessage)), Created(_))
+        .flatMap(Created(_))
     }
   }
 
@@ -29,25 +29,25 @@ object Server extends IOApp {
       case GET -> Root / "spots" =>
         service
           .sharedSpots()
-          .redeemWith(e => BadRequest(APIError(e.getMessage)), Ok(_))
+          .flatMap(Ok(_))
 
       case request @ POST -> Root / "spots" =>
         request
           .as[SpotCreate]
           .flatMap(service.create)
-          .redeemWith(e => BadRequest(APIError(e.getMessage)), Created(_))
+          .flatMap(Created(_))
 
       case request @ POST -> Root / "spots" / "share" =>
         request
           .as[ShareCreate]
           .flatMap(service.share)
-          .redeemWith(e => BadRequest(APIError(e.getMessage)), Created(_))
+          .flatMap(Created(_))
 
       case request @ POST -> Root / "spots" / "book" =>
         request
           .as[BookingCreate]
           .flatMap(service.book)
-          .redeemWith(e => BadRequest(APIError(e.getMessage)), Created(_))
+          .flatMap(Created(_))
     }
   }
 
@@ -60,7 +60,9 @@ object Server extends IOApp {
     val bookSpotRepo = BookingRepo.inMemory[IO]()
     val spotService = SpotService.make[IO](userRepo, spotRepo, spotShareRepo, bookSpotRepo)
 
-    ErrorHandling { users(userService) <+> spots(spotService) }.orNotFound
+    ErrorHandling {
+      withAPIError { users(userService) <+> spots(spotService) }
+    }.orNotFound
   }
 
   override def run(args: List[String]): IO[ExitCode] =
