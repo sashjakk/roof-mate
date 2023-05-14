@@ -32,6 +32,7 @@ object Codecs {
         interval <- {
           type ErrOr[A] = Either[Throwable, A]
 
+          // TODO: looks like extra mapping, need a way to convert to DecodingFailure directly
           Interval.from[ErrOr](from, to) match {
             case Right(value) => value.asRight[DecodingFailure]
             case Left(value)  => DecodingFailure.fromThrowable(value, List.empty).asLeft[Interval]
