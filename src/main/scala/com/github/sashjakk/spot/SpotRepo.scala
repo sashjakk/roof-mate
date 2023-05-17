@@ -1,7 +1,10 @@
 package com.github.sashjakk.spot
 
-import cats.effect.Sync
-import cats.implicits.catsSyntaxEq
+import cats.effect._
+import cats.implicits.{catsSyntaxEq, toFunctorOps}
+import doobie._
+import doobie.implicits._
+import doobie.postgres.implicits._
 
 import java.util.UUID
 import scala.collection.mutable
@@ -31,4 +34,31 @@ object SpotRepo {
       override def findByIdentifier(identifier: String): F[Option[Spot]] =
         Sync[F].delay(memory.values.find(_.identifier === identifier))
     }
+
+  def postgres[F[_]: Async](transactor: Transactor[F]): SpotRepo[F] = {
+    new SpotRepo[F] {
+      val selectSpot = fr"select id, identifier, user_id from spots"
+
+      override def create(spot: SpotCreate): F[Spot] = {
+        sql"insert into spots (identifier, user_id) values (${spot.identifier}, ${spot.userId})".update
+          .withUniqueGeneratedKeys[UUID]("id")
+          .transact(transactor)
+          .map(id => Spot(id, spot.identifier, spot.userId))
+      }
+
+      override def findById(id: UUID): F[Option[Spot]] = {
+        (selectSpot ++ fr"where id = $id")
+          .query[Spot]
+          .option
+          .transact(transactor)
+      }
+
+      override def findByIdentifier(identifier: String): F[Option[Spot]] = {
+        (selectSpot ++ fr"where identifier = $identifier")
+          .query[Spot]
+          .option
+          .transact(transactor)
+      }
+    }
+  }
 }
