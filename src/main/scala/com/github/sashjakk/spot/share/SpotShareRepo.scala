@@ -1,7 +1,12 @@
 package com.github.sashjakk.spot.share
 
-import cats.effect.Sync
-import cats.implicits.catsSyntaxEq
+import cats.effect._
+import cats.implicits._
+import doobie._
+import doobie.implicits._
+import doobie.postgres._
+import doobie.postgres.implicits._
+import doobie.util.transactor.Transactor
 
 import java.util.UUID
 import scala.collection.mutable
@@ -34,4 +39,42 @@ object SpotShareRepo {
 
       override def all(): F[List[Share]] = Sync[F].delay(memory.values.toList)
     }
+
+  def postgres[F[_]: Async](transactor: Transactor[F]): SpotShareRepo[F] = {
+
+    new SpotShareRepo[F] {
+      val selectShare = fr"select id, spot_id, from_timestamp, to_timestamp from shares"
+
+      override def create(share: ShareCreate): F[Share] = {
+        sql"""
+            insert into shares (spot_id, from_timestamp, to_timestamp) values
+            (${share.spotId}, ${share.from}, ${share.to})
+          """.update
+          .withUniqueGeneratedKeys[UUID]("id")
+          .transact(transactor)
+          .map(id => Share(id, share.spotId, share.from, share.to))
+      }
+
+      override def findById(id: UUID): F[Option[Share]] = {
+        (selectShare ++ fr"where id = $id")
+          .query[Share]
+          .option
+          .transact(transactor)
+      }
+
+      override def findBySpotId(id: UUID): F[Option[Share]] = {
+        (selectShare ++ fr"where spot_id = $id")
+          .query[Share]
+          .option
+          .transact(transactor)
+      }
+
+      override def all(): F[List[Share]] = {
+        selectShare
+          .query[Share]
+          .to[List]
+          .transact(transactor)
+      }
+    }
+  }
 }
