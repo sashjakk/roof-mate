@@ -16,11 +16,21 @@ services:
   roof-mate:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.local
     ports:
       - 8080:8080
     depends_on:
       database:
         condition: service_healthy
+    volumes:
+      - type: bind
+        source: $PWD/frontend/target/scala-2.13/roof-mate-frontend-fastopt/main.js
+        target: /var/www/public/main.js
+      - type: bind
+        source: $PWD/frontend/target/scala-2.13/roof-mate-frontend-fastopt/main.js.map
+        target: /var/www/public/main.js.map
+      - type: bind
+        source: $PWD/frontend/src/main/resources/index.html
+        target: /var/www/public/index.html
     env_file:
       - .env.local
