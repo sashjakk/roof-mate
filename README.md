@@ -11,9 +11,14 @@ marp: true
 - People are quite friendly and try to share their spots while not in use
 - They use WhatsApp to share & produce a lot of unmanaged spam
 
----
-## Examples 
+--- 
+![alt text](./assets/sample-2.png)
 
+--- 
+![alt text](./assets/sample-1.png)
+
+---
+![alt text](./assets/sample-3.png)
 
 ---
 ## Problems 
@@ -31,9 +36,6 @@ marp: true
 - register with name & phone
 - share your spot with exact times
 - observe free spots with available time intervals & book
-
----
-## Show case
 
 ---
 ## Tech Stack
@@ -61,13 +63,16 @@ marp: true
 - fly.io for production
 
 ---
+# Show case
+
+---
 
 # Most interesting parts
 
 ---
 ## Interval
 
-Custom syntax for working with java.time.Instant (mostly for testing)
+Custom syntax for working with _java.time.Instant_ (mostly for testing)
 
 ```scala
   it should "check overlapping" in {
