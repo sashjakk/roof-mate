@@ -8,8 +8,11 @@ import com.github.sashjakk.spot.book.{Booking, BookingCreate, BookingRepo}
 import com.github.sashjakk.spot.share.{Share, ShareCreate, SpotShareRepo}
 import com.github.sashjakk.user.UserRepo
 
+import java.util.UUID
+
 trait SpotService[F[_]] {
   def create(spot: SpotCreate): F[Spot]
+  def userSpots(user: UUID): F[List[Spot]]
   def sharedSpots(): F[List[FreeSpot]]
   def share(share: ShareCreate): F[Share]
   def book(booking: BookingCreate): F[Booking]
@@ -34,6 +37,15 @@ object SpotService {
 
           spot <- spotRepo.create(spot)
         } yield spot
+      }
+
+      override def userSpots(user: UUID): F[List[Spot]] = {
+        for {
+          _ <- OptionT(userRepo.findById(user))
+            .getOrRaise(new Error("User does not exist"))
+
+          spots <- spotRepo.findByUser(user)
+        } yield spots
       }
 
       override def sharedSpots(): F[List[FreeSpot]] = {

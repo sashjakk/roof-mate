@@ -13,6 +13,7 @@ trait SpotRepo[F[_]] {
   def create(spot: SpotCreate): F[Spot]
   def findById(id: UUID): F[Option[Spot]]
   def findByIdentifier(identifier: String): F[Option[Spot]]
+  def findByUser(user: UUID): F[List[Spot]]
 }
 
 object SpotRepo {
@@ -33,6 +34,9 @@ object SpotRepo {
 
       override def findByIdentifier(identifier: String): F[Option[Spot]] =
         Sync[F].delay(memory.values.find(_.identifier === identifier))
+
+      override def findByUser(user: UUID): F[List[Spot]] =
+        Sync[F].delay(memory.values.filter(_.userId === user).toList)
     }
 
   def postgres[F[_]: Async](transactor: Transactor[F]): SpotRepo[F] = {
@@ -57,6 +61,13 @@ object SpotRepo {
         (selectSpot ++ fr"where identifier = $identifier")
           .query[Spot]
           .option
+          .transact(transactor)
+      }
+
+      override def findByUser(user: UUID): F[List[Spot]] = {
+        (selectSpot ++ fr"where user_id = $user")
+          .query[Spot]
+          .to[List]
           .transact(transactor)
       }
     }

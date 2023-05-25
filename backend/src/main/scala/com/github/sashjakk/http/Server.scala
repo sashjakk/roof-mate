@@ -8,7 +8,7 @@ import com.github.sashjakk.http.API._
 import com.github.sashjakk.spot._
 import com.github.sashjakk.spot.book.{BookingCreate, BookingRepo}
 import com.github.sashjakk.spot.share.{ShareCreate, SpotShareRepo}
-import com.github.sashjakk.user.{UserCreate, UserRepo, UserService}
+import com.github.sashjakk.user.{UserCreate, UserLogin, UserRepo, UserService}
 import doobie.util.transactor.Transactor
 import fly4s.core.Fly4s
 import fly4s.core.data.{Fly4sConfig, Location}
@@ -25,12 +25,24 @@ import pureconfig.module.catseffect.syntax._
 import java.net.URI
 
 object Server extends IOApp {
-  private def users(service: UserService[IO]): HttpRoutes[IO] = {
-    HttpRoutes.of[IO] { case request @ POST -> Root / "users" =>
-      request
-        .as[UserCreate]
-        .flatMap(service.create)
-        .flatMap(Created(_))
+  private def users(userService: UserService[IO], spotService: SpotService[IO]): HttpRoutes[IO] = {
+    HttpRoutes.of[IO] {
+      case request @ POST -> Root / "users" / "create" =>
+        request
+          .as[UserCreate]
+          .flatMap(userService.create)
+          .flatMap(Created(_))
+
+      case request @ POST -> Root / "users" / "login" =>
+        request
+          .as[UserLogin]
+          .flatMap(userService.login)
+          .flatMap(Ok(_))
+
+      case GET -> Root / "users" / UUIDVar(user) / "spots" =>
+        spotService
+          .userSpots(user)
+          .flatMap(Ok(_))
     }
   }
 
@@ -75,7 +87,7 @@ object Server extends IOApp {
     val bookSpotRepo = BookingRepo.postgres[IO](transactor)
     val spotService = SpotService.make[IO](userRepo, spotRepo, spotShareRepo, bookSpotRepo)
 
-    withAPIError(users(userService) <+> spots(spotService))
+    withAPIError(users(userService, spotService) <+> spots(spotService))
   }
 
   override def run(args: List[String]): IO[ExitCode] = {
